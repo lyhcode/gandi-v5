@@ -1,0 +1,4 @@
+[
+  {"id": "org-001", "name": "My Organization", "type": "individual"},
+  {"id": "org-002", "name": "Company Inc", "type": "company"}
+]

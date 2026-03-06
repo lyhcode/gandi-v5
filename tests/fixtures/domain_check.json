@@ -1,0 +1,12 @@
+{
+  "currency": "USD",
+  "products": [
+    {
+      "name": "example.com",
+      "status": "available",
+      "prices": [
+        {"duration_unit": "y", "duration": 1, "price_after_taxes": 12.99}
+      ]
+    }
+  ]
+}

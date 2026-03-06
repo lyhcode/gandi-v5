@@ -1,0 +1,4 @@
+[
+  {"source": "info", "destinations": ["john@gmail.com", "jane@gmail.com"]},
+  {"source": "support", "destinations": ["team@company.com"]}
+]

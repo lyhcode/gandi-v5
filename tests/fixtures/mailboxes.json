@@ -1,0 +1,4 @@
+[
+  {"id": "mb-001", "address": "admin@example.com", "login": "admin", "mailbox_type": "standard", "quota_used": 1024, "aliases": []},
+  {"id": "mb-002", "address": "info@example.com", "login": "info", "mailbox_type": "premium", "quota_used": 5120, "aliases": ["contact@example.com"]}
+]

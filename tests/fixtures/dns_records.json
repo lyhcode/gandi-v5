@@ -1,0 +1,7 @@
+[
+  {"rrset_name": "@", "rrset_type": "A", "rrset_ttl": 10800, "rrset_values": ["203.0.113.1"]},
+  {"rrset_name": "@", "rrset_type": "MX", "rrset_ttl": 10800, "rrset_values": ["10 mail.example.com."]},
+  {"rrset_name": "www", "rrset_type": "CNAME", "rrset_ttl": 10800, "rrset_values": ["example.com."]},
+  {"rrset_name": "@", "rrset_type": "TXT", "rrset_ttl": 10800, "rrset_values": ["v=spf1 include:_spf.google.com ~all"]},
+  {"rrset_name": "sub", "rrset_type": "A", "rrset_ttl": 3600, "rrset_values": ["203.0.113.2"]}
+]

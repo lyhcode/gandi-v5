@@ -1,0 +1,24 @@
+[
+  {
+    "fqdn": "example.com",
+    "status": ["clientTransferProhibited"],
+    "dates": {"registry_ends_at": "2025-12-31T00:00:00Z"},
+    "autorenew": true,
+    "nameservers": ["ns1.gandi.net", "ns2.gandi.net"],
+    "tld": "com",
+    "owner": "John Doe",
+    "orga_owner": "My Org",
+    "tags": []
+  },
+  {
+    "fqdn": "example.net",
+    "status": ["clientTransferProhibited"],
+    "dates": {"registry_ends_at": "2026-06-15T00:00:00Z"},
+    "autorenew": false,
+    "nameservers": ["ns1.gandi.net"],
+    "tld": "net",
+    "owner": "Jane Doe",
+    "orga_owner": "My Org",
+    "tags": ["production"]
+  }
+]

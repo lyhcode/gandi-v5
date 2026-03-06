@@ -1,0 +1,24 @@
+[
+  {
+    "id": "cert-001",
+    "cn": "example.com",
+    "status": "valid",
+    "dates": {
+      "starts_at": "2024-01-01T00:00:00Z",
+      "ends_at": "2025-01-01T00:00:00Z"
+    },
+    "package": {"name": "std_dv_1y"},
+    "altnames": ["www.example.com"]
+  },
+  {
+    "id": "cert-002",
+    "cn": "shop.example.com",
+    "status": "expired",
+    "dates": {
+      "starts_at": "2023-06-15T00:00:00Z",
+      "ends_at": "2024-06-15T00:00:00Z"
+    },
+    "package": {"name": "std_dv_1y"},
+    "altnames": []
+  }
+]
