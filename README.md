@@ -24,7 +24,7 @@ pip install agent-gandi-cli
 Or install from source:
 
 ```bash
-pip install git+https://github.com/lyhcode/gandi-cli
+pip install git+https://github.com/lyhcode/agent-gandi-cli
 ```
 
 ## Authentication
