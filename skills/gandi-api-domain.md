@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when working with domain management commands (`gandi domain`).
-Full API reference: `docs/domain-api.md`
+API endpoint reference: `skills/api-reference.md` (Domain API section)
+User docs reference: `skills/01-domain-names.md`
 
 ## Currently Implemented Commands
 - `gandi domain list` — List domains
@@ -48,3 +49,17 @@ Full API reference: `docs/domain-api.md`
 - `owner` — contact object
 - `autorenew` — boolean
 - `tags` — array of strings
+
+## Business Rules & Constraints
+- Nameserver changes take **12-24 hours** to propagate globally
+- Domain transfer requires **EPP/auth code** from current registrar and domain must be **unlocked**
+- Transfer lock must be disabled before initiating transfer out
+- WHOIS privacy (anonymized contact) is available and can be toggled per domain
+- Domain owner change is a separate workflow from contact updates (requires FOA email confirmation)
+- Domains can be tagged for organization; tags are useful for filtering in `domain list`
+- Glue records (host objects) are needed for vanity nameservers (e.g., ns1.yourdomain.com)
+
+## Workflow Tips
+- `gandi domain info` should show WHOIS privacy status and autorenew state
+- When implementing `domain register`, support `--dry-run` via `Dry-Run: 1` header
+- When implementing `domain transfer`, warn about unlock requirement and EPP code

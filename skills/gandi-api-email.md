@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when working with email management commands (`gandi email`).
-Full API reference: `docs/email-api.md` and `docs/mailbox-api.md`
+API endpoint reference: `skills/api-reference.md` (Email API / Mailbox API sections)
+User docs reference: `skills/09-email.md`
 
 ## Currently Implemented Commands
 - `gandi email forward list <domain>` — List email forwards
@@ -36,9 +37,28 @@ Full API reference: `docs/email-api.md` and `docs/mailbox-api.md`
 - `POST /v5/email/mailboxes/{domain}/{mailbox_id}/renew` — Renew mailbox
 - `GET /v5/email/slots/{domain}` — List email slots
 
-### Mailbox API (BETA) — docs/mailbox-api.md
-Alternative newer API at `/v5/mailbox/`:
+### Mailbox API (BETA) — `/v5/mailbox/`
+Alternative newer API:
 - `GET /v5/mailbox/domains` — List domains with email
 - `GET /v5/mailbox/domains/{domain}/mailboxes` — List mailboxes
 - `POST /v5/mailbox/domains/{domain}/mailboxes` — Create mailbox
 - Forwards, products, quotas, slots management
+
+## Business Rules & Constraints
+- **Forward limits**: Max 1000 forwards per domain, max 100 creations/updates per week (HTTP 429 on exceed)
+- **Mailbox lifecycle**: Expired mailboxes are permanently deleted after 60 days
+- **Subdomain email not supported**: Cannot create mailbox for sub.domain.com
+- **Password restrictions**: Avoid `@` and `!` in mailbox passwords — causes issues with mobile email apps
+- **MX prerequisites**: Email requires proper MX and SPF records to be configured first
+- **Gmail forwarding issue**: Gmail frequently marks forwarded email as spam
+- **Forwards vs. Aliases vs. Dynamic aliases**:
+  - **Forward**: Redirects to external email (cross-domain); consumes a forward slot
+  - **Alias**: Additional address pointing to same mailbox (same domain); configured via mailbox PATCH
+  - **Dynamic alias**: `user+anything@domain` works automatically with no configuration needed
+- Mailbox offers: `standard_2023` (10GB), `premium_2023` (50GB)
+
+## Workflow Tips
+- `gandi email forward create` should warn about 100/week rate limit and Gmail spam issues
+- `gandi email mailbox create` should verify MX records exist before creating
+- When listing mailboxes, show `expires_at` and `autorenew` status prominently
+- Consider implementing `gandi email alias` commands as wrappers around mailbox PATCH

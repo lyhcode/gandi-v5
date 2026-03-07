@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when working with SSL certificate commands (`gandi cert`).
-Full API reference: `docs/certificate-api.md`
+API endpoint reference: `skills/api-reference.md` (Certificate API section)
+User docs reference: `skills/10-ssl-certificates.md`
 
 ## Currently Implemented Commands
 - `gandi cert list` — List certificates
@@ -40,3 +41,21 @@ Full API reference: `docs/certificate-api.md`
 - `dates.created_at`, `dates.ends_at`
 - `package` — Certificate package name
 - `dcv_method` — dns, email, http, cname
+
+## Business Rules & Constraints
+- **Certificate types**: Standard (DV, single domain), Pro (DV, wildcard/multi-domain), Business (OV)
+- **CSR generation**: Required for certificate creation; typical openssl command:
+  ```
+  openssl req -new -newkey rsa:2048 -nodes -keyout domain.key -out domain.csr
+  ```
+- **DCV methods**: DNS (add TXT record), Email (admin@domain), HTTP (file on server), CNAME
+- **DNS DCV**: Easiest with CLI — can automate TXT record creation via `gandi dns create`
+- Providers: Sectigo (default) and Digicert (added 2024)
+- `apex_only` parameter available for certificates that only need bare domain coverage
+- Tags can be attached to certificates for organization
+- CSV export supported via `Accept: text/csv` header on list endpoint
+
+## Workflow Tips
+- `gandi cert create` could include CSR generation helper or accept key+domain to auto-generate
+- After ordering, automate DCV by creating the required DNS TXT record via `gandi dns create`
+- `gandi cert list` should highlight certificates nearing expiration

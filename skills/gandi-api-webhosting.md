@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when implementing web hosting management commands.
-Full API reference: `docs/webhosting-api.md`
+API endpoint reference: `skills/api-reference.md` (Web Hosting API section)
+User docs reference: `skills/08-link-domain-to-website.md`
 
 ## Currently Implemented Commands
 None — web hosting commands not yet implemented.
@@ -30,3 +31,11 @@ gandi hosting info <id>
 gandi hosting vhost list <id>
 gandi hosting vhost create <id> <fqdn>
 ```
+
+## Business Rules & Constraints
+- `sharing_id` query param is **deprecated** for web hosting routes (since 2025-08-14)
+- Instance status values: `active` (not `running`)
+- The `deploy` attribute is removed; use `deployment` on vhost or `sftp` on instance
+- Three methods to link domain to hosting: A record, CNAME record, or Gandi nameservers
+- Actual base path is `/v5/simplehosting/` (not `/v5/web/hosting/`)
+- Instance actions include restart; cache purge is per-vhost

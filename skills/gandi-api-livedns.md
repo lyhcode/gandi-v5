@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when working with DNS record management commands (`gandi dns`).
-Full API reference: `docs/livedns-api.md`
+API endpoint reference: `skills/api-reference.md` (LiveDNS API section)
+User docs reference: `skills/02-dns-records.md`, `skills/03-dnssec.md`
 
 ## Currently Implemented Commands
 - `gandi dns list <domain>` — List DNS records (with --type, --name filters)
@@ -42,4 +43,19 @@ Full API reference: `docs/livedns-api.md`
 - Nameservers: `GET /v5/livedns/domains/{fqdn}/nameservers` — List NS
 
 ### Supported Record Types
-A, AAAA, ALIAS, CAA, CDS, CNAME, DNAME, DS, LOC, MX, NAPTR, NS, OPENPGPKEY, PTR, RP, SPF, SRV, SSHFP, TLSA, TXT, WKS
+A, AAAA, ALIAS, CAA, CDS, CNAME, DNAME, DS, HTTPS, KEY, LOC, MX, NAPTR, NS, OPENPGPKEY, PTR, RP, SOA, SPF, SRV, SSHFP, SVCB, TLSA, TXT, WKS
+
+## Business Rules & Constraints
+- DNS record changes take **~3 hours** to propagate; full propagation up to **72 hours**
+- **ALIAS + DNSSEC incompatibility**: ALIAS records on bare domain (@) will break DNSSEC — must warn users
+- CNAME cannot coexist with other record types on the same name
+- Automatic snapshots are created on every record modification (if enabled)
+- Snapshots can be used to restore DNS to a previous state (backup/restore workflow)
+- Zone export supports `Accept: text/plain` header for BIND-format zone file
+
+## Workflow Tips
+- `gandi dns create` should hint about propagation delay after successful creation
+- When creating MX records, remind about SPF/TXT record for email deliverability
+- When detecting ALIAS on @ with DNSSEC enabled, emit a warning
+- Snapshot commands (`gandi dns snapshot list/create/restore`) would be valuable for backup/restore
+- DNS import (reverse of export) could parse zone files and batch-create records

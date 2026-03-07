@@ -2,7 +2,8 @@
 
 ## When to use
 Use this skill when working with organization commands (`gandi org`).
-Full API reference: `docs/organization-api.md`
+API endpoint reference: `skills/api-reference.md` (Organization API section)
+User docs reference: `skills/11-organizations.md`
 
 ## Currently Implemented Commands
 - `gandi org list` — List organizations
@@ -37,3 +38,16 @@ Full API reference: `docs/organization-api.md`
 - `type` — individual, company, association, etc.
 - `corporate_name` — Legal name
 - `email` — Contact email
+
+## Business Rules & Constraints
+- **PAT (Personal Access Token)** is the only supported auth method; API Key is deprecated
+- **PAT expiration**: Configurable from 7 days to 1 year
+- **PAT permissions**: Granular per-product (domains, DNS, email, certificates, etc.)
+- **Organization as sharing_id**: The org `id` is used as `sharing_id` to scope API requests
+- **Teams**: Organizations can have teams with different permission sets
+- **Permission categories**: Domain management, DNS management, email management, billing, certificates, hosting, organization admin
+
+## Workflow Tips
+- `gandi auth status` should show PAT expiration date and warn when nearing expiry
+- `gandi org pat renew` would be valuable to avoid auth disruption
+- When PAT lacks permission for an operation, surface a clear error suggesting which permission is needed
