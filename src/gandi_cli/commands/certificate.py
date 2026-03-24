@@ -482,7 +482,7 @@ def cert_dcv_info(
         if dcv_method:
             client.patch(
                 f"/certificate/issued-certs/{cert_id}/dcv",
-                json={"dcv_method": dcv_method},
+                json={"method": dcv_method},
             )
 
         body: dict = {}

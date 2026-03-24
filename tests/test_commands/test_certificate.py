@@ -334,7 +334,7 @@ class TestCertDcvInfo:
         assert requests[0].method == "PATCH"
         assert "/certificate/issued-certs/cert-001/dcv" in str(requests[0].url)
         patch_body = json.loads(requests[0].content)
-        assert patch_body["dcv_method"] == "dns"
+        assert patch_body["method"] == "dns"
         # Second request: POST to fetch DCV params
         assert requests[1].method == "POST"
         assert "/dcv_params" in str(requests[1].url)
@@ -827,7 +827,7 @@ class TestCertDcvInfoExoDns:
         # PATCH sets the DCV method
         assert requests[0].method == "PATCH"
         patch_body = json.loads(requests[0].content)
-        assert patch_body["dcv_method"] == "dns"
+        assert patch_body["method"] == "dns"
 
     def test_exo_dns_respects_explicit_dcv_method(self, httpx_mock: HTTPXMock):
         """Explicit --dcv-method should not be overridden by --exo-dns."""
@@ -846,7 +846,7 @@ class TestCertDcvInfoExoDns:
         requests = httpx_mock.get_requests()
         # PATCH should use the explicit method
         patch_body = json.loads(requests[0].content)
-        assert patch_body["dcv_method"] == "http"
+        assert patch_body["method"] == "http"
 
     def test_exo_dns_outputs_multiple_commands(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params_multi.json")
