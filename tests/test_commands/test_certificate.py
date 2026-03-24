@@ -1,6 +1,7 @@
 """Tests for certificate commands."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
 from unittest.mock import patch, MagicMock
@@ -411,54 +412,106 @@ class TestCertSetDcvMethod:
 class TestCertDownload:
     """Tests for the certificate download command."""
 
-    def test_cert_download_to_stdout(self, httpx_mock: HTTPXMock):
-        pem_text = "-----BEGIN CERTIFICATE-----\nMIItest\n-----END CERTIFICATE-----\n"
-        httpx_mock.add_response(text=pem_text, headers={"content-type": "text/plain"})
+    DOMAIN_PEM = "-----BEGIN CERTIFICATE-----\nMIIdomain\n-----END CERTIFICATE-----\n"
+    INTER_PEM = "-----BEGIN CERTIFICATE-----\nMIIintermediate\n-----END CERTIFICATE-----\n"
+    CERT_INFO = {
+        "id": "cert-001",
+        "cn": "example.com",
+        "status": "valid",
+        "package": {"name": "cert_std_1_10_0_digicert"},
+    }
+
+    def _mock_download(self, httpx_mock, cert_info=None, domain_pem=None, inter_pem=None):
+        """Register the 3 GET responses: cert info, domain PEM, intermediate PEM."""
+        httpx_mock.add_response(
+            json=cert_info or self.CERT_INFO,
+            url=re.compile(r".*/issued-certs/cert-001$"),
+        )
+        httpx_mock.add_response(
+            text=domain_pem or self.DOMAIN_PEM,
+            headers={"content-type": "text/plain"},
+            url=re.compile(r".*/issued-certs/cert-001/crt"),
+        )
+        httpx_mock.add_response(
+            text=inter_pem or self.INTER_PEM,
+            headers={"content-type": "text/plain"},
+            url=re.compile(r".*/pem/cert_std"),
+        )
+
+    def test_cert_download_writes_chain_file(self, httpx_mock: HTTPXMock, tmp_path):
+        self._mock_download(httpx_mock)
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
-            result = runner.invoke(app, ["cert", "download", "cert-001"])
+            result = runner.invoke(app, ["cert", "download", "cert-001", "-d", str(tmp_path)])
 
         assert result.exit_code == 0
-        assert "BEGIN CERTIFICATE" in result.stdout
-        assert "MIItest" in result.stdout
-
-    def test_cert_download_requests_correct_url(self, httpx_mock: HTTPXMock):
-        httpx_mock.add_response(text="pem-data", headers={"content-type": "text/plain"})
-
-        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
-            mock_client.return_value = GandiClient(token="test-token")
-            result = runner.invoke(app, ["cert", "download", "cert-001"])
-
-        assert result.exit_code == 0
-        request = httpx_mock.get_request()
-        assert "/certificate/issued-certs/cert-001/crt" in str(request.url)
-
-    def test_cert_download_to_file(self, httpx_mock: HTTPXMock, tmp_path):
-        pem_text = "-----BEGIN CERTIFICATE-----\nMIItest\n-----END CERTIFICATE-----\n"
-        httpx_mock.add_response(text=pem_text, headers={"content-type": "text/plain"})
-        out_file = tmp_path / "cert.pem"
-
-        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
-            mock_client.return_value = GandiClient(token="test-token")
-            result = runner.invoke(app, ["cert", "download", "cert-001", "--output", str(out_file)])
-
-        assert result.exit_code == 0
-        assert "written to" in result.stdout.lower()
+        out_file = tmp_path / "example.com.crt"
         assert out_file.exists()
         content = out_file.read_text()
-        assert "BEGIN CERTIFICATE" in content
+        assert "MIIdomain" in content
+        assert "MIIintermediate" in content
+        assert "written to" in result.stdout.lower()
 
-    def test_cert_download_sends_accept_header(self, httpx_mock: HTTPXMock):
-        httpx_mock.add_response(text="pem-data", headers={"content-type": "text/plain"})
+    def test_cert_download_chain_order(self, httpx_mock: HTTPXMock, tmp_path):
+        """Domain cert comes before intermediate."""
+        self._mock_download(httpx_mock)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "download", "cert-001", "-d", str(tmp_path)])
+
+        assert result.exit_code == 0
+        content = (tmp_path / "example.com.crt").read_text()
+        assert content.index("MIIdomain") < content.index("MIIintermediate")
+
+    def test_cert_download_requests_correct_urls(self, httpx_mock: HTTPXMock, tmp_path):
+        self._mock_download(httpx_mock)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "download", "cert-001", "-d", str(tmp_path)])
+
+        assert result.exit_code == 0
+        requests = httpx_mock.get_requests()
+        urls = [str(r.url) for r in requests]
+        assert any("/issued-certs/cert-001" in u and "/crt" not in u and "/dcv" not in u for u in urls)
+        assert any("/issued-certs/cert-001/crt" in u for u in urls)
+        assert any("/pem/cert_std" in u for u in urls)
+
+    def test_cert_download_uses_cn_as_filename(self, httpx_mock: HTTPXMock, tmp_path):
+        info = dict(self.CERT_INFO, cn="myapp.example.org")
+        self._mock_download(httpx_mock, cert_info=info)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "download", "cert-001", "-d", str(tmp_path)])
+
+        assert result.exit_code == 0
+        assert (tmp_path / "myapp.example.org.crt").exists()
+
+    def test_cert_download_default_output_dir(self, httpx_mock: HTTPXMock, tmp_path, monkeypatch):
+        """Without -d, writes to current directory."""
+        self._mock_download(httpx_mock)
+        monkeypatch.chdir(tmp_path)
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
             result = runner.invoke(app, ["cert", "download", "cert-001"])
 
         assert result.exit_code == 0
-        request = httpx_mock.get_request()
-        assert request.headers.get("accept") == "text/plain"
+        assert (tmp_path / "example.com.crt").exists()
+
+    def test_cert_download_creates_output_dir(self, httpx_mock: HTTPXMock, tmp_path):
+        self._mock_download(httpx_mock)
+        out_dir = tmp_path / "sub" / "nested"
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "download", "cert-001", "-d", str(out_dir)])
+
+        assert result.exit_code == 0
+        assert (out_dir / "example.com.crt").exists()
 
 
 class TestCertCsr:
@@ -812,8 +865,15 @@ class TestJsonOutput:
         assert isinstance(parsed["raw_messages"], list)
 
     def test_cert_download_json(self, httpx_mock: HTTPXMock):
-        pem_text = "-----BEGIN CERTIFICATE-----\nMIItest\n-----END CERTIFICATE-----\n"
-        httpx_mock.add_response(text=pem_text, headers={"content-type": "text/plain"})
+        cert_info = {
+            "id": "cert-001", "cn": "example.com", "status": "valid",
+            "package": {"name": "cert_std_1_10_0_digicert"},
+        }
+        domain_pem = "-----BEGIN CERTIFICATE-----\nMIIdomain\n-----END CERTIFICATE-----\n"
+        inter_pem = "-----BEGIN CERTIFICATE-----\nMIIintermediate\n-----END CERTIFICATE-----\n"
+        httpx_mock.add_response(json=cert_info, url=re.compile(r".*/issued-certs/cert-001$"))
+        httpx_mock.add_response(text=domain_pem, headers={"content-type": "text/plain"}, url=re.compile(r".*/crt"))
+        httpx_mock.add_response(text=inter_pem, headers={"content-type": "text/plain"}, url=re.compile(r".*/pem/"))
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client, \
              self._patch_json_format():
@@ -823,7 +883,9 @@ class TestJsonOutput:
         assert result.exit_code == 0
         parsed = json.loads(result.stdout)
         assert parsed["id"] == "cert-001"
-        assert "BEGIN CERTIFICATE" in parsed["certificate"]
+        assert parsed["cn"] == "example.com"
+        assert "MIIdomain" in parsed["certificate"]
+        assert "MIIintermediate" in parsed["certificate"]
 
     def test_cert_csr_json(self, tmp_path):
         def fake_openssl(cmd, **kwargs):
@@ -977,6 +1039,30 @@ class TestCertDcvInfoExoDns:
 
         assert result.exit_code == 0
         assert "exo dns" not in result.stdout
+
+
+class TestPackageToPemType:
+    """Tests for the _package_to_pem_type helper."""
+
+    def test_std_digicert(self):
+        from gandi_cli.commands.certificate import _package_to_pem_type
+        assert _package_to_pem_type("cert_std_1_10_0_digicert") == "cert_std"
+
+    def test_std_plain(self):
+        from gandi_cli.commands.certificate import _package_to_pem_type
+        assert _package_to_pem_type("cert_std_1_0_0") == "cert_std"
+
+    def test_bus(self):
+        from gandi_cli.commands.certificate import _package_to_pem_type
+        assert _package_to_pem_type("cert_bus_1_0_0") == "cert_bus"
+
+    def test_pro(self):
+        from gandi_cli.commands.certificate import _package_to_pem_type
+        assert _package_to_pem_type("cert_pro_3_10_0_digicert") == "cert_pro"
+
+    def test_no_version(self):
+        from gandi_cli.commands.certificate import _package_to_pem_type
+        assert _package_to_pem_type("cert_std") == "cert_std"
 
 
 class TestFqdnToExoArgs:

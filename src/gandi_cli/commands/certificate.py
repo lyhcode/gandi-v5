@@ -531,35 +531,84 @@ def cert_dcv_info(
         raise typer.Exit(1)
 
 
+def _package_to_pem_type(package_name: str) -> str:
+    """Derive the intermediate cert type from a package name.
+
+    Package names look like 'cert_std_1_10_0_digicert' or 'cert_bus_1_0_0'.
+    The PEM type is the prefix before the version digits, e.g. 'cert_std'.
+    """
+    parts = package_name.split("_")
+    # Walk until we hit a digit — everything before that is the type.
+    prefix_parts = []
+    for part in parts:
+        if part.isdigit():
+            break
+        prefix_parts.append(part)
+    return "_".join(prefix_parts) if prefix_parts else package_name
+
+
 @cert_app.command("download")
 def cert_download(
     cert_id: Annotated[str, typer.Argument(help="Certificate ID")],
-    output_file: Annotated[
-        Optional[Path],
-        typer.Option("--output", "-o", help="Write certificate to file instead of stdout"),
-    ] = None,
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-d", help="Directory for the .crt file"),
+    ] = Path("."),
 ):
-    """Download the issued certificate PEM.
+    """Download the certificate chain (domain + intermediate) as a PEM file.
 
-    Retrieves the certificate data for a given certificate ID. By default
-    prints to stdout; use --output to write to a file.
+    Fetches the issued certificate and the matching intermediate
+    certificate, concatenates them, and writes the result to
+    OUTPUT_DIR/DOMAIN.crt (where DOMAIN is the certificate CN).
     """
     client = _get_client()
     try:
-        data = client.get(
+        # 1. Fetch cert details to get CN and package name
+        info = client.get(f"/certificate/issued-certs/{cert_id}")
+        cn = info.get("cn", "")
+        if not cn:
+            typer.echo("Error: certificate has no CN.", err=True)
+            raise typer.Exit(1)
+        pkg = info.get("package", {})
+        package_name = pkg.get("name", "") if isinstance(pkg, dict) else str(pkg)
+        if not package_name:
+            typer.echo("Error: certificate has no package name.", err=True)
+            raise typer.Exit(1)
+
+        pem_type = _package_to_pem_type(package_name)
+
+        # 2. Fetch domain cert
+        domain_pem = client.get(
             f"/certificate/issued-certs/{cert_id}/crt",
             headers={"Accept": "text/plain"},
         )
+        domain_pem = domain_pem if isinstance(domain_pem, str) else str(domain_pem)
+
+        # 3. Fetch intermediate cert
+        intermediate_pem = client.get(
+            f"/certificate/pem/{pem_type}",
+            headers={"Accept": "text/plain"},
+        )
+        intermediate_pem = intermediate_pem if isinstance(intermediate_pem, str) else str(intermediate_pem)
+
+        # 4. Concatenate and write
+        chain = domain_pem.rstrip("\n") + "\n" + intermediate_pem.rstrip("\n") + "\n"
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out_file = output_dir / f"{cn}.crt"
+
         from gandi_cli.main import state
 
-        pem_text = data if isinstance(data, str) else str(data)
         if state.output_format == "json":
-            print_json_output({"id": cert_id, "certificate": pem_text})
-        elif output_file:
-            output_file.write_text(pem_text)
-            typer.echo(f"Certificate written to {output_file}")
+            print_json_output({
+                "id": cert_id,
+                "cn": cn,
+                "file": str(out_file),
+                "certificate": chain,
+            })
         else:
-            typer.echo(pem_text, nl=False)
+            out_file.write_text(chain)
+            typer.echo(f"Certificate chain written to {out_file}")
     except GandiAPIError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
