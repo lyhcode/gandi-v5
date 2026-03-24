@@ -1,5 +1,6 @@
 """Certificate management commands."""
 
+import subprocess
 from pathlib import Path
 from typing import Annotated, Optional
 
@@ -21,6 +22,139 @@ def _get_client() -> GandiClient:
         )
         raise typer.Exit(1)
     return GandiClient(token=state.token, sharing_id=state.sharing_id, sandbox=state.sandbox)
+
+
+@cert_app.command("csr")
+def cert_csr(
+    domain: Annotated[str, typer.Argument(help="Domain name (used as filename base and CN)")],
+    output_dir: Annotated[
+        Path,
+        typer.Option("--output-dir", "-d", help="Directory for key and CSR files"),
+    ] = Path("."),
+    subject: Annotated[
+        Optional[str],
+        typer.Option("--subject", "-s", help="Full subject string (overrides default /CN=domain)"),
+    ] = None,
+):
+    """Generate a private key and CSR for a domain.
+
+    Runs openssl to create a 2048-bit RSA key and a SHA-256 CSR.
+    Files are written to OUTPUT_DIR as DOMAIN.key and DOMAIN.csr.
+
+    Will refuse to overwrite an existing .key file to prevent
+    accidental private key loss. Remove or rename it first if you
+    need to regenerate.
+    """
+    output_dir.mkdir(parents=True, exist_ok=True)
+    key_file = output_dir / f"{domain}.key"
+    csr_file = output_dir / f"{domain}.csr"
+
+    if key_file.exists():
+        typer.echo(
+            f"Error: Key file already exists: {key_file}\n"
+            f"Remove or rename it before generating a new key.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    subj = subject or f"/CN={domain}"
+    cmd = [
+        "openssl", "req", "-new", "-sha256",
+        "-newkey", "rsa:2048", "-nodes",
+        "-keyout", str(key_file),
+        "-out", str(csr_file),
+        "-subj", subj,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        typer.echo("Error: openssl not found. Install OpenSSL and try again.", err=True)
+        raise typer.Exit(1)
+
+    if result.returncode != 0:
+        typer.echo(f"Error: openssl failed:\n{result.stderr}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(f"Key:  {key_file}")
+    typer.echo(f"CSR:  {csr_file}")
+
+
+@cert_app.command("issue")
+def cert_issue(
+    csr: Annotated[
+        Path,
+        typer.Option("--csr", help="Path to PEM-encoded CSR file"),
+    ],
+    package: Annotated[
+        str,
+        typer.Option("--package", help="Certificate package name (e.g. cert_std_1_10_0_digicert)"),
+    ],
+    dcv_method: Annotated[
+        Optional[str],
+        typer.Option(
+            "--dcv-method",
+            help="Domain validation method: email, dns, file, http, https",
+        ),
+    ] = None,
+    altnames: Annotated[
+        Optional[str],
+        typer.Option("--altnames", help="Comma-separated Subject Alternative Names"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Validate parameters without placing the order"),
+    ] = False,
+):
+    """Purchase and issue a new certificate.
+
+    Submits a CSR to order a new certificate with the specified package.
+    Use 'cert csr' to generate the CSR first, and 'gandi cert packages'
+    or the Gandi docs to find available package names.
+
+    After issuing, use 'cert dcv-info' to get domain validation
+    parameters and 'cert download' to retrieve the signed certificate.
+    """
+    client = _get_client()
+    try:
+        csr_text = csr.read_text()
+    except FileNotFoundError:
+        typer.echo(f"Error: CSR file not found: {csr}", err=True)
+        raise typer.Exit(1)
+    except OSError as e:
+        typer.echo(f"Error reading CSR file: {e}", err=True)
+        raise typer.Exit(1)
+
+    body: dict = {"csr": csr_text, "package": package}
+    if dcv_method:
+        body["dcv_method"] = dcv_method
+    if altnames:
+        body["altnames"] = [s.strip() for s in altnames.split(",")]
+
+    headers = {}
+    if dry_run:
+        headers["Dry-Run"] = "1"
+
+    try:
+        data = client.post(
+            "/certificate/issued-certs",
+            json=body,
+            headers=headers,
+        )
+        from gandi_cli.main import state
+
+        if dry_run:
+            typer.echo("Dry run: parameters are valid.")
+        else:
+            typer.echo("Certificate order submitted.")
+        if isinstance(data, dict) and data:
+            fields = [
+                ("id", "Certificate ID"),
+                ("message", "Message"),
+            ]
+            output(data, fmt=state.output_format, detail_fields=fields)
+    except GandiAPIError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
 
 @cert_app.command("list")
