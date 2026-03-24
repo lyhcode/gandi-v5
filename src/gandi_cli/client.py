@@ -89,9 +89,11 @@ class GandiClient:
         path: str,
         json: dict | None = None,
         params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict | list | str:
         params = self._inject_sharing_id(params)
-        response = self._client.post(path, json=json, params=params)
+        extra_headers = headers or {}
+        response = self._client.post(path, json=json, params=params, headers=extra_headers)
         return self._handle_response(response)
 
     def put(
@@ -108,8 +110,10 @@ class GandiClient:
         path: str,
         json: dict | None = None,
         params: dict | None = None,
+        headers: dict | None = None,
     ) -> dict | list | str:
-        response = self._client.patch(path, json=json, params=params)
+        extra_headers = headers or {}
+        response = self._client.patch(path, json=json, params=params, headers=extra_headers)
         return self._handle_response(response)
 
     def delete(
