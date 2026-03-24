@@ -779,3 +779,94 @@ class TestJsonOutput:
         assert parsed["csr"].endswith("example.com.csr")
         # No human-readable messages mixed in
         assert "Key:" not in result.stdout
+
+
+class TestCertDcvInfoExoDns:
+    """Tests for --exo-dns flag on dcv-info command."""
+
+    def test_exo_dns_outputs_cname_command(self, httpx_mock: HTTPXMock):
+        fixture = load_fixture("dcv_params.json")
+        httpx_mock.add_response(json=fixture)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "dcv-info", "cert-001", "--exo-dns"])
+
+        assert result.exit_code == 0
+        assert "exo dns add CNAME example.com" in result.stdout
+        assert "-n _acme-challenge" in result.stdout
+        assert "-a dcv-token-abc123.comodoca.com" in result.stdout
+
+    def test_exo_dns_outputs_multiple_commands(self, httpx_mock: HTTPXMock):
+        fixture = load_fixture("dcv_params_multi.json")
+        httpx_mock.add_response(json=fixture)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "dcv-info", "cert-001", "--exo-dns"])
+
+        assert result.exit_code == 0
+        lines = [l for l in result.stdout.strip().splitlines() if l.startswith("exo")]
+        assert len(lines) == 2
+        assert "-n _acme-challenge " in lines[0]
+        assert "-n _acme-challenge.www " in lines[1]
+
+    def test_exo_dns_json_mode(self, httpx_mock: HTTPXMock):
+        fixture = load_fixture("dcv_params_multi.json")
+        httpx_mock.add_response(json=fixture)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client, \
+             patch("gandi_cli.main.state.output_format", "json"):
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "dcv-info", "cert-001", "--exo-dns"])
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.stdout)
+        assert "commands" in parsed
+        assert len(parsed["commands"]) == 2
+        assert parsed["commands"][0].startswith("exo dns add")
+
+    def test_exo_dns_without_flag_shows_normal_output(self, httpx_mock: HTTPXMock):
+        fixture = load_fixture("dcv_params.json")
+        httpx_mock.add_response(json=fixture)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "dcv-info", "cert-001"])
+
+        assert result.exit_code == 0
+        assert "exo dns" not in result.stdout
+
+
+class TestFqdnToExoArgs:
+    """Tests for the _fqdn_to_exo_args helper."""
+
+    def test_simple_subdomain(self):
+        from gandi_cli.commands.certificate import _fqdn_to_exo_args
+        name, domain = _fqdn_to_exo_args("_acme-challenge.example.com")
+        assert name == "_acme-challenge"
+        assert domain == "example.com"
+
+    def test_deep_subdomain(self):
+        from gandi_cli.commands.certificate import _fqdn_to_exo_args
+        name, domain = _fqdn_to_exo_args("_acme-challenge.www.example.com")
+        assert name == "_acme-challenge.www"
+        assert domain == "example.com"
+
+    def test_bare_domain(self):
+        from gandi_cli.commands.certificate import _fqdn_to_exo_args
+        name, domain = _fqdn_to_exo_args("example.com")
+        assert name == ""
+        assert domain == "example.com"
+
+    def test_cctld(self):
+        from gandi_cli.commands.certificate import _fqdn_to_exo_args
+        name, domain = _fqdn_to_exo_args("_acme-challenge.example.co.uk")
+        assert name == "_acme-challenge"
+        assert domain == "example.co.uk"
+
+    def test_trailing_dot(self):
+        from gandi_cli.commands.certificate import _fqdn_to_exo_args
+        name, domain = _fqdn_to_exo_args("_acme-challenge.example.com.")
+        assert name == "_acme-challenge"
+        assert domain == "example.com"
