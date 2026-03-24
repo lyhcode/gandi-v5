@@ -495,6 +495,8 @@ def cert_dcv_info(
             except OSError as e:
                 typer.echo(f"Error reading CSR file: {e}", err=True)
                 raise typer.Exit(1)
+        if dcv_method:
+            body["dcv_method"] = dcv_method
         if package:
             body["package"] = package
 
