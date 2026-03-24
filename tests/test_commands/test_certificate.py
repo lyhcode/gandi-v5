@@ -1041,6 +1041,77 @@ class TestCertDcvInfoExoDns:
         assert "exo dns" not in result.stdout
 
 
+class TestCertRevoke:
+    """Tests for the certificate revoke command."""
+
+    def test_cert_revoke_with_force(self, httpx_mock: HTTPXMock):
+        httpx_mock.add_response(status_code=204)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001", "--force"])
+
+        assert result.exit_code == 0
+        assert "revoked" in result.stdout.lower()
+        assert "cert-001" in result.stdout
+
+    def test_cert_revoke_sends_delete(self, httpx_mock: HTTPXMock):
+        httpx_mock.add_response(status_code=204)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001", "--force"])
+
+        assert result.exit_code == 0
+        request = httpx_mock.get_request()
+        assert request.method == "DELETE"
+        assert "/certificate/issued-certs/cert-001" in str(request.url)
+
+    def test_cert_revoke_prompts_without_force(self, httpx_mock: HTTPXMock):
+        httpx_mock.add_response(status_code=204)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001"], input="y\n")
+
+        assert result.exit_code == 0
+        assert "revoked" in result.stdout.lower()
+
+    def test_cert_revoke_aborts_on_no(self):
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001"], input="n\n")
+
+        assert result.exit_code == 0
+        assert "aborted" in result.stdout.lower()
+
+    def test_cert_revoke_json_output(self, httpx_mock: HTTPXMock):
+        httpx_mock.add_response(status_code=204)
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client, \
+             patch("gandi_cli.main.state.output_format", "json"):
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001", "--force"])
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.stdout)
+        assert parsed["id"] == "cert-001"
+        assert parsed["status"] == "revoked"
+
+    def test_cert_revoke_api_error(self, httpx_mock: HTTPXMock):
+        httpx_mock.add_response(
+            status_code=403,
+            json={"message": "Access denied", "cause": "forbidden"},
+        )
+
+        with patch("gandi_cli.commands.certificate._get_client") as mock_client:
+            mock_client.return_value = GandiClient(token="test-token")
+            result = runner.invoke(app, ["cert", "revoke", "cert-001", "--force"])
+
+        assert result.exit_code == 1
+        assert "error" in result.stdout.lower() or "error" in (result.output or "").lower()
+
+
 class TestPackageToPemType:
     """Tests for the _package_to_pem_type helper."""
 

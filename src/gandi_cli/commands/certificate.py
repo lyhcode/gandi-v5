@@ -612,3 +612,38 @@ def cert_download(
     except GandiAPIError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
+
+
+@cert_app.command("revoke")
+def cert_revoke(
+    cert_id: Annotated[str, typer.Argument(help="Certificate ID")],
+    force: Annotated[
+        bool,
+        typer.Option("--force", "-f", help="Skip confirmation prompt"),
+    ] = False,
+):
+    """Revoke a certificate.
+
+    This permanently revokes the certificate. The operation cannot be
+    undone. You will be prompted for confirmation unless --force is used.
+    """
+    if not force:
+        confirm = typer.confirm(
+            f"Revoke certificate {cert_id}? This cannot be undone."
+        )
+        if not confirm:
+            typer.echo("Aborted.")
+            raise typer.Exit(0)
+
+    client = _get_client()
+    try:
+        client.delete(f"/certificate/issued-certs/{cert_id}")
+        from gandi_cli.main import state
+
+        if state.output_format == "json":
+            print_json_output({"id": cert_id, "status": "revoked"})
+        else:
+            typer.echo(f"Certificate {cert_id} has been revoked.")
+    except GandiAPIError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
