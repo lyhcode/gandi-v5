@@ -1,0 +1,13 @@
+{
+  "cn": "example.com",
+  "fqdns": [
+    {
+      "fqdn": "example.com",
+      "method": "dns",
+      "status": "pending",
+      "type": "CNAME",
+      "name": "_acme-challenge.example.com",
+      "value": "dcv-token-abc123.comodoca.com"
+    }
+  ]
+}
