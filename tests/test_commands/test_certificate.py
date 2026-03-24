@@ -320,16 +320,24 @@ class TestCertDcvInfo:
 
     def test_cert_dcv_info_with_dcv_method(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params.json")
-        httpx_mock.add_response(json=fixture)
+        # PATCH to set DCV method, then POST to fetch params
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
             result = runner.invoke(app, ["cert", "dcv-info", "cert-001", "--dcv-method", "dns"])
 
         assert result.exit_code == 0
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["dcv_method"] == "dns"
+        requests = httpx_mock.get_requests()
+        # First request: PATCH to set DCV method
+        assert requests[0].method == "PATCH"
+        assert "/certificate/issued-certs/cert-001/dcv" in str(requests[0].url)
+        patch_body = json.loads(requests[0].content)
+        assert patch_body["dcv_method"] == "dns"
+        # Second request: POST to fetch DCV params
+        assert requests[1].method == "POST"
+        assert "/dcv_params" in str(requests[1].url)
 
     def test_cert_dcv_info_with_package(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params.json")
@@ -734,7 +742,9 @@ class TestJsonOutput:
 
     def test_cert_dcv_info_json(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params.json")
-        httpx_mock.add_response(json=fixture)
+        # PATCH to set DCV method, then POST to fetch params
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client, \
              self._patch_json_format():
@@ -788,7 +798,9 @@ class TestCertDcvInfoExoDns:
 
     def test_exo_dns_outputs_cname_command(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params.json")
-        httpx_mock.add_response(json=fixture)
+        # --exo-dns implies --dcv-method dns → PATCH then POST
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
@@ -800,23 +812,29 @@ class TestCertDcvInfoExoDns:
         assert "-a dcv-token-abc123.comodoca.com" in result.stdout
 
     def test_exo_dns_implies_dcv_method_dns(self, httpx_mock: HTTPXMock):
-        """--exo-dns should automatically set --dcv-method dns."""
+        """--exo-dns should automatically set --dcv-method dns via PATCH."""
         fixture = load_fixture("dcv_params.json")
-        httpx_mock.add_response(json=fixture)
+        # PATCH to set DCV method dns, then POST to fetch params
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
             result = runner.invoke(app, ["cert", "dcv-info", "cert-001", "--exo-dns"])
 
         assert result.exit_code == 0
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["dcv_method"] == "dns"
+        requests = httpx_mock.get_requests()
+        # PATCH sets the DCV method
+        assert requests[0].method == "PATCH"
+        patch_body = json.loads(requests[0].content)
+        assert patch_body["dcv_method"] == "dns"
 
     def test_exo_dns_respects_explicit_dcv_method(self, httpx_mock: HTTPXMock):
         """Explicit --dcv-method should not be overridden by --exo-dns."""
         fixture = load_fixture("dcv_params.json")
-        httpx_mock.add_response(json=fixture)
+        # PATCH to set DCV method http, then POST to fetch params
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
@@ -825,13 +843,16 @@ class TestCertDcvInfoExoDns:
                 "--exo-dns", "--dcv-method", "http",
             ])
 
-        request = httpx_mock.get_request()
-        body = json.loads(request.content)
-        assert body["dcv_method"] == "http"
+        requests = httpx_mock.get_requests()
+        # PATCH should use the explicit method
+        patch_body = json.loads(requests[0].content)
+        assert patch_body["dcv_method"] == "http"
 
     def test_exo_dns_outputs_multiple_commands(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params_multi.json")
-        httpx_mock.add_response(json=fixture)
+        # --exo-dns implies --dcv-method dns → PATCH then POST
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
@@ -845,7 +866,9 @@ class TestCertDcvInfoExoDns:
 
     def test_exo_dns_json_mode(self, httpx_mock: HTTPXMock):
         fixture = load_fixture("dcv_params_multi.json")
-        httpx_mock.add_response(json=fixture)
+        # --exo-dns implies --dcv-method dns → PATCH then POST
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client, \
              patch("gandi_cli.main.state.output_format", "json"):
@@ -861,7 +884,9 @@ class TestCertDcvInfoExoDns:
     def test_exo_dns_with_string_fqdns_and_raw_messages(self, httpx_mock: HTTPXMock):
         """Handle real API shape where fqdns is a list of strings."""
         fixture = load_fixture("dcv_params_strings.json")
-        httpx_mock.add_response(json=fixture)
+        # --exo-dns implies --dcv-method dns → PATCH then POST
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
@@ -884,7 +909,9 @@ class TestCertDcvInfoExoDns:
                 "Please add the following DNS record: _dnsauth.example.com. 10800 IN CNAME _token.dcv.digicert.com."
             ]
         }
-        httpx_mock.add_response(json=fixture)
+        # --exo-dns implies --dcv-method dns → PATCH then POST
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")
@@ -898,7 +925,9 @@ class TestCertDcvInfoExoDns:
     def test_exo_dns_no_records_shows_message(self, httpx_mock: HTTPXMock):
         """Shows message when no DNS records can be extracted."""
         fixture = {"dcv_method": "email", "fqdns": ["example.com"]}
-        httpx_mock.add_response(json=fixture)
+        # PATCH to set DCV method email, then POST to fetch params
+        httpx_mock.add_response(json={}, method="PATCH")
+        httpx_mock.add_response(json=fixture, method="POST")
 
         with patch("gandi_cli.commands.certificate._get_client") as mock_client:
             mock_client.return_value = GandiClient(token="test-token")

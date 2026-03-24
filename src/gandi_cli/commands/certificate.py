@@ -476,22 +476,28 @@ def cert_dcv_info(
     if exo_dns and not dcv_method:
         dcv_method = "dns"
 
-    body: dict = {}
-    if csr:
-        try:
-            body["csr"] = csr.read_text()
-        except FileNotFoundError:
-            typer.echo(f"Error: CSR file not found: {csr}", err=True)
-            raise typer.Exit(1)
-        except OSError as e:
-            typer.echo(f"Error reading CSR file: {e}", err=True)
-            raise typer.Exit(1)
-    if dcv_method:
-        body["dcv_method"] = dcv_method
-    if package:
-        body["package"] = package
-
     try:
+        # If a DCV method is specified, first set it via PATCH on the
+        # certificate's DCV endpoint, then fetch the params.
+        if dcv_method:
+            client.patch(
+                f"/certificate/issued-certs/{cert_id}/dcv",
+                json={"dcv_method": dcv_method},
+            )
+
+        body: dict = {}
+        if csr:
+            try:
+                body["csr"] = csr.read_text()
+            except FileNotFoundError:
+                typer.echo(f"Error: CSR file not found: {csr}", err=True)
+                raise typer.Exit(1)
+            except OSError as e:
+                typer.echo(f"Error reading CSR file: {e}", err=True)
+                raise typer.Exit(1)
+        if package:
+            body["package"] = package
+
         data = client.post(
             f"/certificate/issued-certs/{cert_id}/dcv_params",
             json=body,
