@@ -1,5 +1,6 @@
 """Certificate management commands."""
 
+from pathlib import Path
 from typing import Annotated, Optional
 
 import typer
@@ -96,6 +97,161 @@ def cert_info(
         data["starts_at"] = (dates.get("starts_at") or "")[:10]
         data["ends_at"] = (dates.get("ends_at") or "")[:10]
         output(data, fmt=state.output_format, detail_fields=fields)
+    except GandiAPIError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@cert_app.command("reissue")
+def cert_reissue(
+    cert_id: Annotated[str, typer.Argument(help="Certificate ID")],
+    csr: Annotated[
+        Path,
+        typer.Option("--csr", help="Path to PEM-encoded CSR file"),
+    ],
+    dcv_method: Annotated[
+        Optional[str],
+        typer.Option(
+            "--dcv-method",
+            help="Domain validation method: email, dns, file, http, https",
+        ),
+    ] = None,
+    duration: Annotated[
+        Optional[int],
+        typer.Option("--duration", help="Certificate duration in years"),
+    ] = None,
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Validate parameters without performing the operation"),
+    ] = False,
+):
+    """Reissue (renew) a certificate.
+
+    Submits a new CSR to reissue an existing certificate. Requires a
+    PEM-encoded CSR file. After reissue, use 'cert dcv-info' to retrieve
+    domain validation parameters and 'cert download' to fetch the issued
+    certificate.
+    """
+    client = _get_client()
+    try:
+        csr_text = csr.read_text()
+    except FileNotFoundError:
+        typer.echo(f"Error: CSR file not found: {csr}", err=True)
+        raise typer.Exit(1)
+    except OSError as e:
+        typer.echo(f"Error reading CSR file: {e}", err=True)
+        raise typer.Exit(1)
+
+    body: dict = {"csr": csr_text}
+    if dcv_method:
+        body["dcv_method"] = dcv_method
+    if duration is not None:
+        body["duration"] = duration
+
+    headers = {}
+    if dry_run:
+        headers["Dry-Run"] = "1"
+
+    try:
+        data = client.post(
+            f"/certificate/issued-certs/{cert_id}",
+            json=body,
+            headers=headers,
+        )
+        from gandi_cli.main import state
+
+        if dry_run:
+            typer.echo("Dry run: parameters are valid.")
+        else:
+            typer.echo(f"Certificate {cert_id} reissue submitted.")
+        if isinstance(data, dict) and data:
+            output(data, fmt=state.output_format, detail_fields=[
+                ("message", "Message"),
+            ])
+    except GandiAPIError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@cert_app.command("dcv-info")
+def cert_dcv_info(
+    cert_id: Annotated[str, typer.Argument(help="Certificate ID")],
+    csr: Annotated[
+        Optional[Path],
+        typer.Option("--csr", help="Path to PEM-encoded CSR file"),
+    ] = None,
+    dcv_method: Annotated[
+        Optional[str],
+        typer.Option(
+            "--dcv-method",
+            help="DCV method to get params for: email, dns, file, http, https",
+        ),
+    ] = None,
+    package: Annotated[
+        Optional[str],
+        typer.Option("--package", help="Certificate package name"),
+    ] = None,
+):
+    """Get Domain Control Validation (DCV) parameters for a certificate.
+
+    Returns the DNS record or file content needed to complete domain
+    validation. Useful after 'cert reissue' to determine what validation
+    step is required.
+    """
+    client = _get_client()
+
+    body: dict = {}
+    if csr:
+        try:
+            body["csr"] = csr.read_text()
+        except FileNotFoundError:
+            typer.echo(f"Error: CSR file not found: {csr}", err=True)
+            raise typer.Exit(1)
+        except OSError as e:
+            typer.echo(f"Error reading CSR file: {e}", err=True)
+            raise typer.Exit(1)
+    if dcv_method:
+        body["dcv_method"] = dcv_method
+    if package:
+        body["package"] = package
+
+    try:
+        data = client.post(
+            f"/certificate/issued-certs/{cert_id}/dcv_params",
+            json=body,
+        )
+        from gandi_cli.main import state
+
+        output(data, fmt=state.output_format)
+    except GandiAPIError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
+
+
+@cert_app.command("download")
+def cert_download(
+    cert_id: Annotated[str, typer.Argument(help="Certificate ID")],
+    output_file: Annotated[
+        Optional[Path],
+        typer.Option("--output", "-o", help="Write certificate to file instead of stdout"),
+    ] = None,
+):
+    """Download the issued certificate PEM.
+
+    Retrieves the certificate data for a given certificate ID. By default
+    prints to stdout; use --output to write to a file.
+    """
+    client = _get_client()
+    try:
+        data = client.get(
+            f"/certificate/issued-certs/{cert_id}/crt",
+            headers={"Accept": "text/plain"},
+        )
+        if output_file:
+            output_file.write_text(data if isinstance(data, str) else str(data))
+            typer.echo(f"Certificate written to {output_file}")
+        else:
+            typer.echo(data if isinstance(data, str) else str(data), nl=False)
     except GandiAPIError as e:
         typer.echo(f"Error: {e}", err=True)
         raise typer.Exit(1)
