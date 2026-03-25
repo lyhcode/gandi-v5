@@ -24,6 +24,19 @@ def _get_client() -> GandiClient:
     return GandiClient(token=state.token, sharing_id=state.sharing_id, sandbox=state.sandbox)
 
 
+def _run_openssl(cmd: list[str]) -> subprocess.CompletedProcess:
+    """Run an openssl command, raising typer.Exit on failure."""
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    except FileNotFoundError:
+        typer.echo("Error: openssl not found. Install OpenSSL and try again.", err=True)
+        raise typer.Exit(1)
+    if result.returncode != 0:
+        typer.echo(f"Error: openssl failed:\n{result.stderr}", err=True)
+        raise typer.Exit(1)
+    return result
+
+
 @cert_app.command("csr")
 def cert_csr(
     domain: Annotated[str, typer.Argument(help="Domain name (used as filename base and CN)")],
@@ -31,9 +44,17 @@ def cert_csr(
         Path,
         typer.Option("--output-dir", "-d", help="Directory for key and CSR files"),
     ] = Path("."),
+    key_type: Annotated[
+        str,
+        typer.Option("--key-type", "-t", help="Key type: ec or rsa"),
+    ] = "ec",
+    curve: Annotated[
+        str,
+        typer.Option("--curve", help="EC curve name (for ec key type)"),
+    ] = "prime256v1",
     bits: Annotated[
         int,
-        typer.Option("--bits", "-b", help="RSA key size in bits"),
+        typer.Option("--bits", "-b", help="RSA key size in bits (for rsa key type)"),
     ] = 2048,
     subject: Annotated[
         Optional[str],
@@ -42,13 +63,19 @@ def cert_csr(
 ):
     """Generate a private key and CSR for a domain.
 
-    Runs openssl to create an RSA key and a SHA-256 CSR.
+    Creates a private key and a SHA-256 CSR in two steps.
+    Supports EC keys (default: prime256v1) and RSA keys.
     Files are written to OUTPUT_DIR as DOMAIN.key and DOMAIN.csr.
 
     Will refuse to overwrite an existing .key file to prevent
     accidental private key loss. Remove or rename it first if you
     need to regenerate.
     """
+    kt = key_type.lower()
+    if kt not in ("ec", "rsa"):
+        typer.echo(f"Error: unsupported key type '{key_type}'. Use 'ec' or 'rsa'.", err=True)
+        raise typer.Exit(1)
+
     output_dir.mkdir(parents=True, exist_ok=True)
     key_file = output_dir / f"{domain}.key"
     csr_file = output_dir / f"{domain}.csr"
@@ -61,23 +88,25 @@ def cert_csr(
         )
         raise typer.Exit(1)
 
+    # Step 1: Generate the private key
+    if kt == "ec":
+        _run_openssl([
+            "openssl", "ecparam", "-genkey", "-name", curve,
+            "-out", str(key_file),
+        ])
+    else:
+        _run_openssl([
+            "openssl", "genrsa", "-out", str(key_file), str(bits),
+        ])
+
+    # Step 2: Generate the CSR from the key
     subj = subject or f"/CN={domain}"
-    cmd = [
+    _run_openssl([
         "openssl", "req", "-new", "-sha256",
-        "-newkey", f"rsa:{bits}", "-nodes",
-        "-keyout", str(key_file),
+        "-key", str(key_file),
         "-out", str(csr_file),
         "-subj", subj,
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True)
-    except FileNotFoundError:
-        typer.echo("Error: openssl not found. Install OpenSSL and try again.", err=True)
-        raise typer.Exit(1)
-
-    if result.returncode != 0:
-        typer.echo(f"Error: openssl failed:\n{result.stderr}", err=True)
-        raise typer.Exit(1)
+    ])
 
     from gandi_cli.main import state
 

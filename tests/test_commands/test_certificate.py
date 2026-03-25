@@ -519,12 +519,10 @@ class TestCertCsr:
 
     def test_cert_csr_generates_files(self, tmp_path):
         def fake_openssl(cmd, **kwargs):
-            # Simulate openssl writing the key and CSR files
+            # Simulate openssl writing key or CSR files
             for i, arg in enumerate(cmd):
-                if arg == "-keyout" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("-----BEGIN PRIVATE KEY-----\nfake\n-----END PRIVATE KEY-----\n")
                 if arg == "-out" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("-----BEGIN CERTIFICATE REQUEST-----\nfake\n-----END CERTIFICATE REQUEST-----\n")
+                    Path(cmd[i + 1]).write_text("-----BEGIN FAKE-----\nfake\n-----END FAKE-----\n")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl):
@@ -535,27 +533,53 @@ class TestCertCsr:
         assert "example.com.csr" in result.stdout
 
     def test_cert_csr_passes_correct_args_to_openssl(self, tmp_path):
-        captured_cmd = []
+        """Default key type is EC with prime256v1."""
+        captured_cmds = []
 
         def fake_openssl(cmd, **kwargs):
-            captured_cmd.extend(cmd)
+            captured_cmds.append(list(cmd))
             for i, arg in enumerate(cmd):
-                if arg == "-keyout" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("key")
                 if arg == "-out" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("csr")
+                    Path(cmd[i + 1]).write_text("data")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl):
             result = runner.invoke(app, ["cert", "csr", "example.com", "-d", str(tmp_path)])
 
         assert result.exit_code == 0
-        assert "openssl" in captured_cmd
-        assert "req" in captured_cmd
-        assert "-sha256" in captured_cmd
-        assert "rsa:2048" in captured_cmd
-        assert "-nodes" in captured_cmd
-        assert "/CN=example.com" in captured_cmd
+        assert len(captured_cmds) == 2
+        # First call: key generation (EC)
+        key_cmd = captured_cmds[0]
+        assert "ecparam" in key_cmd
+        assert "prime256v1" in key_cmd
+        # Second call: CSR generation
+        csr_cmd = captured_cmds[1]
+        assert "req" in csr_cmd
+        assert "-sha256" in csr_cmd
+        assert "/CN=example.com" in csr_cmd
+
+    def test_cert_csr_rsa_key_type(self, tmp_path):
+        """RSA key type uses genrsa with specified bits."""
+        captured_cmds = []
+
+        def fake_openssl(cmd, **kwargs):
+            captured_cmds.append(list(cmd))
+            for i, arg in enumerate(cmd):
+                if arg == "-out" and i + 1 < len(cmd):
+                    Path(cmd[i + 1]).write_text("data")
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl):
+            result = runner.invoke(app, [
+                "cert", "csr", "example.com", "-d", str(tmp_path),
+                "--key-type", "rsa", "--bits", "4096",
+            ])
+
+        assert result.exit_code == 0
+        assert len(captured_cmds) == 2
+        key_cmd = captured_cmds[0]
+        assert "genrsa" in key_cmd
+        assert "4096" in key_cmd
 
     def test_cert_csr_refuses_to_overwrite_key(self, tmp_path):
         key_file = tmp_path / "example.com.key"
@@ -571,15 +595,13 @@ class TestCertCsr:
         assert key_file.read_text() == "existing key"
 
     def test_cert_csr_custom_subject(self, tmp_path):
-        captured_cmd = []
+        captured_cmds = []
 
         def fake_openssl(cmd, **kwargs):
-            captured_cmd.extend(cmd)
+            captured_cmds.append(list(cmd))
             for i, arg in enumerate(cmd):
-                if arg == "-keyout" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("key")
                 if arg == "-out" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("csr")
+                    Path(cmd[i + 1]).write_text("data")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl):
@@ -589,7 +611,8 @@ class TestCertCsr:
             ])
 
         assert result.exit_code == 0
-        assert "/C=FR/O=Example/CN=example.com" in captured_cmd
+        csr_cmd = captured_cmds[1]
+        assert "/C=FR/O=Example/CN=example.com" in csr_cmd
 
     def test_cert_csr_openssl_not_found(self, tmp_path):
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=FileNotFoundError):
@@ -609,10 +632,8 @@ class TestCertCsr:
 
         def fake_openssl(cmd, **kwargs):
             for i, arg in enumerate(cmd):
-                if arg == "-keyout" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("key")
                 if arg == "-out" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("csr")
+                    Path(cmd[i + 1]).write_text("data")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl):
@@ -620,6 +641,13 @@ class TestCertCsr:
 
         assert result.exit_code == 0
         assert out_dir.exists()
+
+    def test_cert_csr_invalid_key_type(self, tmp_path):
+        result = runner.invoke(app, [
+            "cert", "csr", "example.com", "-d", str(tmp_path),
+            "--key-type", "dsa",
+        ])
+        assert result.exit_code == 1
 
 
 class TestCertIssue:
@@ -890,10 +918,8 @@ class TestJsonOutput:
     def test_cert_csr_json(self, tmp_path):
         def fake_openssl(cmd, **kwargs):
             for i, arg in enumerate(cmd):
-                if arg == "-keyout" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("key")
                 if arg == "-out" and i + 1 < len(cmd):
-                    Path(cmd[i + 1]).write_text("csr")
+                    Path(cmd[i + 1]).write_text("data")
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         with patch("gandi_cli.commands.certificate.subprocess.run", side_effect=fake_openssl), \
