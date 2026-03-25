@@ -31,6 +31,10 @@ def cert_csr(
         Path,
         typer.Option("--output-dir", "-d", help="Directory for key and CSR files"),
     ] = Path("."),
+    bits: Annotated[
+        int,
+        typer.Option("--bits", "-b", help="RSA key size in bits"),
+    ] = 2048,
     subject: Annotated[
         Optional[str],
         typer.Option("--subject", "-s", help="Full subject string (overrides default /CN=domain)"),
@@ -38,7 +42,7 @@ def cert_csr(
 ):
     """Generate a private key and CSR for a domain.
 
-    Runs openssl to create a 2048-bit RSA key and a SHA-256 CSR.
+    Runs openssl to create an RSA key and a SHA-256 CSR.
     Files are written to OUTPUT_DIR as DOMAIN.key and DOMAIN.csr.
 
     Will refuse to overwrite an existing .key file to prevent
@@ -60,7 +64,7 @@ def cert_csr(
     subj = subject or f"/CN={domain}"
     cmd = [
         "openssl", "req", "-new", "-sha256",
-        "-newkey", "rsa:2048", "-nodes",
+        "-newkey", f"rsa:{bits}", "-nodes",
         "-keyout", str(key_file),
         "-out", str(csr_file),
         "-subj", subj,
