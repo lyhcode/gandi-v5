@@ -125,8 +125,8 @@ def cert_create(
     ],
     package: Annotated[
         str,
-        typer.Option("--package", help="Certificate package name (e.g. cert_std_1_10_0_digicert)"),
-    ],
+        typer.Option("--package", help="Certificate package name"),
+    ] = "cert_std_1_10_0_digicert",
     dcv_method: Annotated[
         Optional[str],
         typer.Option(
