@@ -110,14 +110,15 @@ def cert_issue(
         typer.Option("--dry-run", help="Validate parameters without placing the order"),
     ] = False,
 ):
-    """Purchase and issue a new certificate.
+    """Purchase a new certificate.
 
     Submits a CSR to order a new certificate with the specified package.
     Use 'cert csr' to generate the CSR first, and 'gandi cert packages'
     or the Gandi docs to find available package names.
 
-    After issuing, use 'cert dcv-info' to get domain validation
-    parameters and 'cert download' to retrieve the signed certificate.
+    After ordering, use 'cert dcv-info' to get domain validation
+    parameters and 'cert download' to retrieve the signed certificate
+    once the CA has issued it.
     """
     client = _get_client()
     try:
@@ -350,18 +351,13 @@ def _fqdn_to_exo_args(fqdn: str) -> tuple[str, str]:
 def _build_exo_dns_commands(data: dict) -> list[str]:
     """Build exo dns add commands from DCV params response.
 
-    Handles three known response shapes from the Gandi API:
-
-    1. Real API (Digicert DNS): raw_messages is a list of [name, value] pairs,
-       dns_records contains BIND-format strings. We parse raw_messages.
-
-    2. Structured fqdns: fqdns is a list of dicts with type/name/value keys.
-
-    3. Flat: fqdns is a list of strings with top-level type/name/value.
+    Parses the real Gandi API DNS DCV response where raw_messages is a
+    list of [name, value] pairs. Falls back to dns_records (BIND-format
+    strings) if raw_messages is absent.
     """
     commands = []
 
-    # Shape 1: raw_messages — the real Gandi API shape for DNS DCV
+    # raw_messages — the real Gandi API shape for DNS DCV
     # Each entry is [record_name, record_value] for a CNAME record
     raw_messages = data.get("raw_messages", [])
     if raw_messages and isinstance(raw_messages[0], list) and len(raw_messages[0]) == 2:
@@ -372,35 +368,13 @@ def _build_exo_dns_commands(data: dict) -> list[str]:
                 commands.append(_format_exo_command("CNAME", name, value))
         return commands
 
-    # Also try dns_records as fallback (BIND-format strings)
+    # Fallback: dns_records (BIND-format strings)
     dns_records = data.get("dns_records", [])
     if dns_records:
         for record in dns_records:
             parsed = _parse_bind_record(record)
             if parsed:
                 commands.append(_format_exo_command(*parsed))
-        if commands:
-            return commands
-
-    fqdns = data.get("fqdns", [])
-
-    # Shape 2: fqdns is a list of dicts (each has type/name/value)
-    if fqdns and isinstance(fqdns[0], dict):
-        for entry in fqdns:
-            record_type = entry.get("type", "").upper()
-            fqdn = entry.get("name", "")
-            value = entry.get("value", "")
-            if not fqdn or not value or not record_type:
-                continue
-            commands.append(_format_exo_command(record_type, fqdn, value))
-        return commands
-
-    # Shape 3: fqdns is a list of strings with top-level type/name/value
-    record_type = data.get("type", "CNAME").upper()
-    top_name = data.get("name", "")
-    top_value = data.get("value", "")
-    if top_name and top_value:
-        commands.append(_format_exo_command(record_type, top_name, top_value))
 
     return commands
 

@@ -34,7 +34,7 @@ state = State()
 
 @app.callback()
 def main(
-    output: Annotated[str, typer.Option("--output-format", "-O", help="Output format: table, json, plain")] = "",
+    output: Annotated[str, typer.Option("--output", "-o", help="Output format: table, json, plain")] = "",
     token: Annotated[Optional[str], typer.Option("--token", envvar="GANDI_PAT", help="API token")] = None,
     sharing_id: Annotated[Optional[str], typer.Option("--sharing-id", envvar="GANDI_SHARING_ID", help="Organization sharing ID")] = None,
     sandbox: Annotated[bool, typer.Option("--sandbox", help="Use Gandi Sandbox API (api.sandbox.gandi.net)")] = False,
