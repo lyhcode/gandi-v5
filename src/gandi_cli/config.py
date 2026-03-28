@@ -75,7 +75,7 @@ def get_token(override: str | None = None) -> str:
     config = load_config()
     if config.auth.pat:
         return config.auth.pat
-    typer.echo("Error: No API token found. Set GANDI_PAT env var, use --token, or run 'gandi config'.", err=True)
+    typer.echo("Error: No API token found. Set GANDI_PAT env var, use --token, or run 'gandi-v5 auth login'.", err=True)
     raise typer.Exit(code=1)
 
 

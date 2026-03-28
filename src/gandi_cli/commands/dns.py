@@ -15,7 +15,7 @@ def _get_client() -> GandiClient:
 
     if not state.token:
         typer.echo(
-            "Error: No API token. Run 'gandi auth login' or set GANDI_PAT.",
+            "Error: No API token. Run 'gandi-v5 auth login' or set GANDI_PAT.",
             err=True,
         )
         raise typer.Exit(1)

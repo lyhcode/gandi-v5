@@ -53,7 +53,7 @@ def status():
         console.print(f"Token:      {masked} (from {source})")
     else:
         console.print("[yellow]No token configured[/yellow]")
-        console.print("Run 'gandi auth login' or set GANDI_PAT environment variable")
+        console.print("Run 'gandi-v5 auth login' or set GANDI_PAT environment variable")
 
     console.print(f"Config:     {get_config_path()}")
 

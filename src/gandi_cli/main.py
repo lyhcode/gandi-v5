@@ -12,7 +12,7 @@ from gandi_cli.commands.organization import org_app
 from gandi_cli.commands.certificate import cert_app
 from gandi_cli.commands.email import email_app
 
-app = typer.Typer(name="gandi", help="Gandi.net CLI tool", no_args_is_help=True)
+app = typer.Typer(name="gandi-v5", help="Gandi.net CLI tool", no_args_is_help=True)
 app.add_typer(auth_app, name="auth")
 app.add_typer(cert_app, name="cert")
 app.add_typer(dns_app, name="dns")

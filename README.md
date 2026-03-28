@@ -1,6 +1,6 @@
-# gandi-cli
+# gandi-v5
 
-CLI tool for [Gandi.net](https://www.gandi.net/) API.
+CLI tool for [Gandi.net](https://www.gandi.net/) API v5.
 
 - Manage domains, DNS records, email, SSL certificates, and organizations
 - Multiple output formats: table, JSON, plain text
@@ -12,19 +12,19 @@ CLI tool for [Gandi.net](https://www.gandi.net/) API.
 Run directly without installing:
 
 ```bash
-uvx agent-gandi-cli gandi --help
+uvx gandi-v5 --help
 ```
 
 ## Install
 
 ```bash
-pip install agent-gandi-cli
+pip install gandi-v5
 ```
 
 Or install from source:
 
 ```bash
-pip install git+https://github.com/lyhcode/agent-gandi-cli
+pip install git+https://github.com/lyhcode/gandi-v5
 ```
 
 ## Authentication
@@ -38,51 +38,51 @@ export GANDI_PAT=your-token-here
 Or save it to config:
 
 ```bash
-gandi auth login
-gandi auth status      # verify authentication
-gandi auth set-org     # set default organization
-gandi auth logout      # remove saved token
+gandi-v5 auth login
+gandi-v5 auth status      # verify authentication
+gandi-v5 auth set-org     # set default organization
+gandi-v5 auth logout      # remove saved token
 ```
 
 ## Usage
 
 ```bash
 # Domains
-gandi domain list
-gandi domain info example.com
-gandi domain check myname.com
+gandi-v5 domain list
+gandi-v5 domain info example.com
+gandi-v5 domain check myname.com
 
 # DNS Records
-gandi dns list example.com
-gandi dns list example.com --type A --name www
-gandi dns get example.com www A
-gandi dns create example.com www A 1.2.3.4
-gandi dns update example.com www A --value 5.6.7.8
-gandi dns delete example.com www A
-gandi dns export example.com
+gandi-v5 dns list example.com
+gandi-v5 dns list example.com --type A --name www
+gandi-v5 dns get example.com www A
+gandi-v5 dns create example.com www A 1.2.3.4
+gandi-v5 dns update example.com www A --value 5.6.7.8
+gandi-v5 dns delete example.com www A
+gandi-v5 dns export example.com
 
 # Email Forwarding
-gandi email forward list example.com
-gandi email forward create example.com info user@gmail.com
-gandi email forward delete example.com info
+gandi-v5 email forward list example.com
+gandi-v5 email forward create example.com info user@gmail.com
+gandi-v5 email forward delete example.com info
 
 # Mailboxes
-gandi email mailbox list example.com
-gandi email mailbox info example.com <mailbox-id>
+gandi-v5 email mailbox list example.com
+gandi-v5 email mailbox info example.com <mailbox-id>
 
 # SSL Certificates
-gandi cert list
-gandi cert info <cert-id>
+gandi-v5 cert list
+gandi-v5 cert info <cert-id>
 
 # Organizations
-gandi org list
-gandi org info <org-id>
-gandi org whoami
+gandi-v5 org list
+gandi-v5 org info <org-id>
+gandi-v5 org whoami
 
 # Output formats
-gandi -o json domain list
-gandi -o plain domain list
-gandi -o table domain list   # default
+gandi-v5 -o json domain list
+gandi-v5 -o plain domain list
+gandi-v5 -o table domain list   # default
 ```
 
 ## Sandbox
@@ -90,7 +90,7 @@ gandi -o table domain list   # default
 Use `--sandbox` to test against the [Gandi Sandbox API](https://api.sandbox.gandi.net/docs/):
 
 ```bash
-gandi --sandbox domain list
+gandi-v5 --sandbox domain list
 ```
 
 ## Configuration
