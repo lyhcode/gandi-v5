@@ -1,0 +1,27 @@
+{
+  "dcv_method": "dns",
+  "fqdns": [
+    "example.com"
+  ],
+  "altnames": [],
+  "dns_records": [
+    "_acme-challenge.example.com. 10800 IN CNAME dcv-token-abc123.comodoca.com.",
+    "_acme-challenge.www.example.com. 10800 IN CNAME dcv-token-abc123.comodoca.com."
+  ],
+  "raw_messages": [
+    [
+      "_acme-challenge.example.com.",
+      "dcv-token-abc123.comodoca.com."
+    ],
+    [
+      "_acme-challenge.www.example.com.",
+      "dcv-token-abc123.comodoca.com."
+    ]
+  ],
+  "messages": [
+    "Please add the following DNS record: _acme-challenge.example.com. 10800 IN CNAME dcv-token-abc123.comodoca.com.",
+    "Please add the following DNS record: _acme-challenge.www.example.com. 10800 IN CNAME dcv-token-abc123.comodoca.com."
+  ],
+  "md5": "_abc123",
+  "sha256": "ABC123DEF456"
+}
